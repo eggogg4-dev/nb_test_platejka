@@ -26,8 +26,13 @@ app.use('/api/health', healthRouter)
 // Root-level create-payment endpoint for frontend compatibility
 app.post('/create-payment', async (req, res, next) => {
   try {
+    logger.info({ body: req.body }, 'Incoming create-payment request')
+
     const { value, error } = createOrderSchema.validate(req.body, { abortEarly: false })
-    if (error) return res.status(400).json({ error: error.details.map(d => d.message) })
+    if (error) {
+      logger.warn({ error }, 'Validation failed for create-payment')
+      return res.status(400).json({ error: error.details.map(d => d.message) })
+    }
 
     const payload = {
       amount: value.amount,
@@ -41,12 +46,13 @@ app.post('/create-payment', async (req, res, next) => {
 
     const data = await createOrder(payload)
     
-    // Extract payment_url from Paymtech response
-    // Paymtech typically returns: payment_url, redirect_url, checkout_url, or url
+    // Extract payment_url from Paymtech response (имена полей могут отличаться)
     const payment_url = data.payment_url || data.redirect_url || data.checkout_url || data.url || data.link
     
     if (!payment_url) {
-      return res.status(500).json({ 
+      logger.error({ provider_response: data }, 'Payment URL not found in provider response')
+      // Возвращаем весь ответ Paymtech наверх, чтобы фронт мог показать реальную ошибку
+      return res.status(502).json({ 
         error: 'Payment URL not found in provider response',
         provider_response: data 
       })
@@ -54,6 +60,21 @@ app.post('/create-payment', async (req, res, next) => {
 
     res.json({ payment_url })
   } catch (err) {
+    logger.error(
+      { err: err.response?.data || err.message },
+      'Unhandled error in /create-payment (provider error)'
+    )
+
+    // Если Paymtech вернул 4xx/5xx с телом — пробрасываем статус и тело наверх
+    if (err.response) {
+      return res
+        .status(err.response.status || 502)
+        .json({
+          error: 'Provider error',
+          provider_response: err.response.data
+        })
+    }
+
     next(err)
   }
 })

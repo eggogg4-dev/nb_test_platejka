@@ -38,8 +38,14 @@ const client = axios.create({
 export async function createOrder(payload) {
   // NOTE: Exact API path/fields may differ; adjust PAYMTECH_ORDER_CREATE_PATH per docs.
   const url = PAYMTECH_ORDER_CREATE_PATH
-  const { data } = await client.post(url, payload)
-  return data
+  try {
+    const { data } = await client.post(url, payload)
+    return data
+  } catch (err) {
+    // Логируем детальный ответ Paymtech, чтобы видеть реальную причину 4xx/5xx
+    console.error('PAYMTECH ERROR:', err.response?.data || err.message)
+    throw err
+  }
 }
 
 export async function getOrderStatus(orderId) {
