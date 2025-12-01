@@ -9,7 +9,6 @@ import paymentsRouter from './routes/payments.js'
 import webhookRouter from './routes/webhook.js'
 import healthRouter from './routes/health.js'
 import { createOrder } from './services/paymtech.js'
-import { createOrderSchema } from './utils/validate.js'
 
 const app = express()
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
@@ -28,23 +27,9 @@ app.post('/create-payment', async (req, res, next) => {
   try {
     logger.info({ body: req.body }, 'Incoming create-payment request')
 
-    const { value, error } = createOrderSchema.validate(req.body, { abortEarly: false })
-    if (error) {
-      logger.warn({ error }, 'Validation failed for create-payment')
-      return res.status(400).json({ error: error.details.map(d => d.message) })
-    }
-
-    const payload = {
-      amount: value.amount,
-      currency: value.currency,
-      merchant_order_id: value.merchant_order_id,
-      description: value.description,
-      return_url: value.return_url,
-      callback_url: value.callback_url,
-      extra: value.extra
-    }
-
-    const data = await createOrder(payload)
+    // ВАЖНО: для create-payment не трогаем payload — отправляем в Paymtech "как есть",
+    // чтобы соответствовать их ожидаемому формату (amount, currency, description, customer, callbackUrl, returnUrl и т.д.)
+    const data = await createOrder(req.body)
     
     // Extract payment_url from Paymtech response (имена полей могут отличаться)
     const payment_url = data.payment_url || data.redirect_url || data.checkout_url || data.url || data.link
