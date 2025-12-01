@@ -15,7 +15,23 @@ const app = express()
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
 
 app.use(helmet())
-app.use(cors())
+
+// Настраиваем CORS под фронт (neuroboost.kz + localhost)
+app.use(cors({
+  origin: [
+    'https://neuroboost.kz',
+    'https://www.neuroboost.kz',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
+
+// Обработка preflight-запросов
+app.options('*', cors())
+
 app.use(express.json({ limit: '1mb' }))
 app.use(morgan('dev'))
 
