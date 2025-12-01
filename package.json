@@ -10,7 +10,7 @@
     "dev": "NODE_ENV=development nodemon --watch src --exec node src/server.js",
     "start": "node src/server.js",
     "lint": "eslint .",
-    "prepare": "husky install"
+    "prepare": "node -e \"try{require('husky').install()}catch(e){if(e.code!=='MODULE_NOT_FOUND')throw e}\""
   },
   "dependencies": {
     "axios": "^1.12.2",
