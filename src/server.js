@@ -9,6 +9,7 @@ import paymentsRouter from './routes/payments.js'
 import webhookRouter from './routes/webhook.js'
 import healthRouter from './routes/health.js'
 import { createOrder } from './services/paymtech.js'
+import { createOrderSchema } from './utils/validate.js'
 
 const app = express()
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' })
@@ -27,9 +28,29 @@ app.post('/create-payment', async (req, res, next) => {
   try {
     logger.info({ body: req.body }, 'Incoming create-payment request')
 
-    // ВАЖНО: для create-payment не трогаем payload — отправляем в Paymtech "как есть",
-    // чтобы соответствовать их ожидаемому формату (amount, currency, description, customer, callbackUrl, returnUrl и т.д.)
-    const data = await createOrder(req.body)
+    // 1. Валидация минимального payload от фронта: только amount и description
+    const { value, error } = createOrderSchema.validate(req.body, { abortEarly: false })
+    if (error) {
+      logger.warn({ error }, 'Validation failed for create-payment')
+      return res.status(400).json({ error: error.details.map(d => d.message) })
+    }
+
+    // 2. Маппим минимальный payload в полный payload Paymtech
+    const paymtechPayload = {
+      amount: value.amount,
+      currency: 'KZT',
+      description: value.description,
+      customer: {
+        name: process.env.PAYMTECH_CUSTOMER_NAME,
+        bin: process.env.PAYMTECH_CUSTOMER_BIN,
+        email: process.env.PAYMTECH_CUSTOMER_EMAIL,
+        phone: process.env.PAYMTECH_CUSTOMER_PHONE
+      },
+      callbackUrl: process.env.PAYMTECH_CALLBACK_URL,
+      returnUrl: process.env.PAYMTECH_RETURN_URL
+    }
+
+    const data = await createOrder(paymtechPayload)
     
     // Extract payment_url from Paymtech response (имена полей могут отличаться)
     const payment_url = data.payment_url || data.redirect_url || data.checkout_url || data.url || data.link
